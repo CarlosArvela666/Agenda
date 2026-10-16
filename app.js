@@ -11,6 +11,7 @@ const $ = (selector) => document.querySelector(selector);
 
 const state = {
   events: loadEvents(),
+  theme: loadTheme(),
   activeFilter: "all",
   query: "",
   view: "month",
@@ -18,6 +19,8 @@ const state = {
   selectedDate: dateKey(new Date()),
   visibleMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
 };
+
+document.documentElement.dataset.theme = state.theme;
 
 function loadEvents() {
   try {
@@ -29,7 +32,39 @@ function loadEvents() {
 }
 
 function saveEvents() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.events));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.events));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function loadTheme() {
+  try {
+    return localStorage.getItem("plano-agenda-theme") === "dark" ? "dark" : "light";
+  } catch {
+    return "light";
+  }
+}
+
+function saveTheme() {
+  try {
+    localStorage.setItem("plano-agenda-theme", state.theme);
+  } catch {
+    // The selected theme remains active for this session if browser storage is unavailable.
+  }
+}
+
+function renderThemeToggle() {
+  const button = $("#themeToggle");
+  const isDark = state.theme === "dark";
+  document.documentElement.dataset.theme = state.theme;
+  button.setAttribute("aria-label", isDark ? "Ativar modo claro" : "Ativar modo escuro");
+  button.title = isDark ? "Ativar modo claro" : "Ativar modo escuro";
+  button.innerHTML = isDark
+    ? '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.8"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>'
+    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.2 15.2A8.7 8.7 0 0 1 8.8 3.8 8.8 8.8 0 1 0 20.2 15.2Z"/></svg>';
 }
 
 function dateKey(date) {
@@ -184,6 +219,7 @@ function renderDayPanel() {
 }
 
 function render() {
+  renderThemeToggle();
   const panel = $(".agenda-panel");
   panel.classList.toggle("list-mode", state.view === "list");
   $("#monthViewButton").classList.toggle("selected", state.view === "month");
@@ -235,17 +271,17 @@ function toggleTask(id) {
   const event = state.events.find((item) => item.id === id);
   if (!event) return;
   event.done = !event.done;
-  saveEvents();
+  const saved = saveEvents();
   render();
-  showToast(event.done ? "Tarefa concluída. Muito bem!" : "Tarefa marcada como por concluir.");
+  showToast(saved ? (event.done ? "Tarefa concluída. Muito bem!" : "Tarefa marcada como por concluir.") : "Alteração guardada apenas nesta sessão.", !saved);
 }
 
 function deleteTask(id) {
   state.events = state.events.filter((event) => event.id !== id);
-  saveEvents();
+  const saved = saveEvents();
   closeDialog();
   render();
-  showToast("Tarefa eliminada.");
+  showToast(saved ? "Tarefa eliminada." : "Alteração guardada apenas nesta sessão.", !saved);
 }
 
 function shiftMonth(amount) {
@@ -265,6 +301,11 @@ $("#nextMonth").addEventListener("click", () => shiftMonth(1));
 $("#todayButton").addEventListener("click", () => {
   state.selectedDate = dateKey(new Date());
   state.visibleMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  render();
+});
+$("#themeToggle").addEventListener("click", () => {
+  state.theme = state.theme === "dark" ? "light" : "dark";
+  saveTheme();
   render();
 });
 $("#monthViewButton").addEventListener("click", () => { state.view = "month"; render(); });
@@ -302,10 +343,10 @@ $("#taskForm").addEventListener("submit", (event) => {
   state.selectedDate = task.date;
   const parsed = parseDate(task.date);
   state.visibleMonth = new Date(parsed.getFullYear(), parsed.getMonth(), 1);
-  saveEvents();
+  const saved = saveEvents();
   closeDialog();
   render();
-  showToast(previous ? "Alterações guardadas." : "Tarefa adicionada à agenda.");
+  showToast(saved ? (previous ? "Alterações guardadas." : "Tarefa adicionada à agenda.") : "Tarefa disponível apenas nesta sessão.", !saved);
 });
 $("#deleteTask").addEventListener("click", () => {
   const id = $("#taskId").value;
